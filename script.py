@@ -18,28 +18,35 @@ EMAIL_SENHA = os.environ.get("EMAIL_PASS")
 EMAIL_DESTINATARIO = os.environ.get("EMAIL_USER") # Pode ser o mesmo ou outro
 
 def enviar_email(assunto, corpo_html):
-    if not EMAIL_REMETENTE or not EMAIL_SENHA:
-        print("Erro: Credenciais de e-mail não configuradas.")
-        return
+    # O EMAIL_USER será seu Gmail pessoal
+    # O EMAIL_PASS será a Senha de App do seu Gmail
+    remetente_gmail = os.environ.get("EMAIL_USER") 
+    senha_gmail = os.environ.get("EMAIL_PASS")
+    
+    # Aqui você define como quer aparecer na caixa de entrada do seu corporativo
+    # Exemplo: "Alerta TCE <seu-email@smarapd.com.br>"
+    nome_exibicao = "Monitor TCE"
+    email_corporativo = "seu-email@smarapd.com.br" # Coloque seu e-mail da empresa aqui
 
     msg = MIMEMultipart()
-    msg['From'] = EMAIL_REMETENTE
-    msg['To'] = EMAIL_DESTINATARIO
+    # Esta linha configura o remetente que você verá no Outlook
+    msg['From'] = f"{nome_exibicao} <{email_corporativo}>"
+    msg['To'] = email_corporativo 
     msg['Subject'] = assunto
 
     msg.attach(MIMEText(corpo_html, 'html'))
 
     try:
-        # Configuração específica para Outlook/Office365
-        server = smtplib.SMTP('smtp.office365.com', 587)
+        # Configuração para Gmail
+        server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login(EMAIL_REMETENTE, EMAIL_SENHA)
-        server.sendmail(EMAIL_REMETENTE, EMAIL_DESTINATARIO, msg.as_string())
+        server.login(remetente_gmail, senha_gmail)
+        server.sendmail(remetente_gmail, email_corporativo, msg.as_string())
         server.quit()
-        print("E-mail enviado com sucesso!")
+        print("E-mail enviado via Gmail com sucesso!")
     except Exception as e:
         print(f"Erro ao enviar e-mail: {e}")
-
+        
 def buscar_comunicados():
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
