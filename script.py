@@ -26,7 +26,7 @@ def enviar_email(assunto, corpo_html):
     # Aqui você define como quer aparecer na caixa de entrada do seu corporativo
     # Exemplo: "Alerta TCE <seu-email@smarapd.com.br>"
     nome_exibicao = "Monitor TCE"
-    email_corporativo = "seu-email@smarapd.com.br" # Coloque seu e-mail da empresa aqui
+    email_corporativo = "atboliveira@smarapd.com.br" # Coloque seu e-mail da empresa aqui
 
     msg = MIMEMultipart()
     # Esta linha configura o remetente que você verá no Outlook
