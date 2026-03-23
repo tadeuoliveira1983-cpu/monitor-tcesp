@@ -1,0 +1,31 @@
+name: Monitor TCE-SP
+on:
+  schedule:
+    - cron: '0 12 * * *' # 12:00 UTC é 09:00h no horário de Brasília
+  workflow_dispatch: # Permite rodar manualmente se quiser
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Instalar dependências
+        run: pip install requests beautifulsoup4
+
+      - name: Executar Script
+        run: python script.py
+
+      - name: Salvar progresso (Git Commit)
+        run: |
+          git config --global user.name 'Bot'
+          git config --global user.email 'bot@github.com'
+          git add comunicados_vistos.json
+          git commit -m "Atualiza base de dados" || echo "Sem novidades"
+          git push
