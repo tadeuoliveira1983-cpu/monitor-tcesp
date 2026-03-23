@@ -1,15 +1,16 @@
 name: Monitor TCE-SP
+
 on:
   schedule:
-    - cron: '0 12 * * *' # 12:00 UTC é 09:00h no horário de Brasília
-  workflow_dispatch: # Permite rodar manualmente se quiser
+    - cron: '0 12 * * *' # 09:00h no horário de Brasília (UTC-3)
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configurar Python
         uses: actions/setup-python@v4
@@ -20,17 +21,6 @@ jobs:
         run: pip install requests beautifulsoup4
 
       - name: Executar Script
-        run: python script.py
-
-      - name: Salvar progresso (Git Commit)
-        run: |
-          git config --global user.name 'Bot'
-          git config --global user.email 'bot@github.com'
-          git add comunicados_vistos.json
-          git commit -m "Atualiza base de dados" || echo "Sem novidades"
-          git push
-
-- name: Executar Script
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
@@ -38,8 +28,8 @@ jobs:
 
       - name: Salvar progresso
         run: |
-          git config --global user.name 'Bot'
-          git config --global user.email 'bot@github.com'
-          git add comunicados_vistos.json
-          git commit -m "Atualiza base de dados" || echo "Sem novidades"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add comunicados_vistos.json || echo "Sem mudanças no arquivo JSON"
+          git commit -m "Atualiza base de dados" || echo "Nada para commitar"
           git push
