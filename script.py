@@ -2,85 +2,96 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-# Configurações
+# Configurações do TCE
 URL_BASE = "https://www.tce.sp.gov.br"
 URL_COMUNICADOS = f"{URL_BASE}/comunicados"
 DB_FILE = "comunicados_vistos.json"
 
+# Configurações de E-mail (Pegando das variáveis de ambiente do GitHub)
+EMAIL_REMETENTE = os.environ.get("EMAIL_USER")
+EMAIL_SENHA = os.environ.get("EMAIL_PASS")
+EMAIL_DESTINATARIO = os.environ.get("EMAIL_USER") # Pode ser o mesmo ou outro
+
+def enviar_email(assunto, corpo_html):
+    if not EMAIL_REMETENTE or not EMAIL_SENHA:
+        print("Erro: Credenciais de e-mail não configuradas.")
+        return
+
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_REMETENTE
+    msg['To'] = EMAIL_DESTINATARIO
+    msg['Subject'] = assunto
+
+    msg.attach(MIMEText(corpo_html, 'html'))
+
+    try:
+        # Configuração específica para Outlook/Office365
+        server = smtplib.SMTP('smtp.office365.com', 587)
+        server.starttls()
+        server.login(EMAIL_REMETENTE, EMAIL_SENHA)
+        server.sendmail(EMAIL_REMETENTE, EMAIL_DESTINATARIO, msg.as_string())
+        server.quit()
+        print("E-mail enviado com sucesso!")
+    except Exception as e:
+        print(f"Erro ao enviar e-mail: {e}")
+
 def buscar_comunicados():
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         response = requests.get(URL_COMUNICADOS, headers=headers)
         response.raise_for_status()
-    except Exception as e:
-        print(f"Erro ao acessar o site: {e}")
+        soup = BeautifulSoup(response.content, 'html.parser')
+        tabela = soup.find('table')
+        if not tabela: return []
+
+        comunicados = []
+        rows = tabela.find_all('tr')[1:]
+        for row in rows:
+            cols = row.find_all('td')
+            if len(cols) < 4: continue
+            area = cols[0].get_text(strip=True).upper()
+            codigo = cols[1].get_text(strip=True)
+            titulo_elem = cols[2].find('a')
+            data_pub = cols[3].get_text(strip=True)
+
+            if area in ['AUDESP', 'SDG'] and "/03/" in data_pub:
+                comunicados.append({
+                    "id": f"{codigo}-{data_pub}",
+                    "codigo": codigo,
+                    "data": data_pub,
+                    "titulo": titulo_elem.get_text(strip=True),
+                    "link": URL_BASE + titulo_elem['href']
+                })
+        return comunicados
+    except:
         return []
-
-    soup = BeautifulSoup(response.content, 'html.parser')
-    tabela = soup.find('table')
-    if not tabela:
-        return []
-
-    comunicados = []
-    # Ignora o cabeçalho da tabela
-    rows = tabela.find_all('tr')[1:]
-
-    for row in rows:
-        cols = row.find_all('td')
-        if len(cols) < 4: continue
-
-        area = cols[0].get_text(strip=True).upper()
-        codigo = cols[1].get_text(strip=True)
-        titulo_elem = cols[2].find('a')
-        titulo = titulo_elem.get_text(strip=True)
-        link = URL_BASE + titulo_elem['href']
-        data_pub = cols[3].get_text(strip=True) # Formato DD/MM/AAAA
-
-        # Filtro: Áreas AUDESP ou SDG e Mês de Março (03)
-        if area in ['AUDESP', 'SDG'] and "/03/" in data_pub:
-            comunicados.append({
-                "id": f"{codigo}-{data_pub}", # Identificador único
-                "codigo": codigo,
-                "data": data_pub,
-                "titulo": titulo,
-                "link": link
-            })
-    
-    return comunicados
-
-def carregar_vistos():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return []
-
-def salvar_vistos(vistos):
-    with open(DB_FILE, 'w', encoding='utf-8') as f:
-        json.dump(vistos, f, ensure_ascii=False, indent=4)
 
 def main():
-    print(f"Verificando comunicados em {datetime.now().strftime('%d/%m/%Y %H:%M')}...")
-    
-    todos_março = buscar_comunicados()
-    vistos = carregar_vistos()
-    
-    # Identifica o que é novo (o ID não está na lista de vistos)
-    novos = [c for c in todos_março if c['id'] not in vistos]
-    
+    todos = buscar_comunicados()
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, 'r') as f: vistos = json.load(f)
+    else: vistos = []
+
+    novos = [c for c in todos if c['id'] not in vistos]
+
     if novos:
-        print("\n--- NOVOS COMUNICADOS ENCONTRADOS ---")
+        corpo = "<h2>Novos Comunicados TCE-SP (Março)</h2><ul>"
         for n in novos:
-            print(f"Código: {n['codigo']}")
-            print(f"Data: {n['data']}")
-            print(f"Título: {n['titulo']}")
-            print(f"Link: {n['link']}")
-            print("-" * 30)
-            vistos.append(n['id']) # Adiciona aos vistos
-        salvar_vistos(vistos)
+            corpo += f"<li><b>{n['codigo']}</b> ({n['data']})<br>{n['titulo']}<br><a href='{n['link']}'>Link Direto</a></li><br>"
+            vistos.append(n['id'])
+        corpo += "</ul>"
+        
+        enviar_email("Alerta: Novos Comunicados AUDESP/SDG", corpo)
+        
+        with open(DB_FILE, 'w') as f:
+            json.dump(vistos, f)
     else:
-        print("Não houve novos comunicados.")
+        print("Sem novidades para enviar por e-mail.")
 
 if __name__ == "__main__":
     main()
