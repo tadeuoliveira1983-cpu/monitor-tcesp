@@ -66,7 +66,9 @@ def buscar_comunicados():
             titulo_elem = cols[2].find('a')
             data_pub = cols[3].get_text(strip=True)
 
-            if area in ['AUDESP', 'SDG'] and "/03/" in data_pub:
+           mes_atual = datetime.now().strftime("/%m/")
+           
+           if area in ['AUDESP', 'SDG'] and mes_atual in data_pub:
                 comunicados.append({
                     "id": f"{codigo}-{data_pub}",
                     "codigo": codigo,
