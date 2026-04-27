@@ -12,32 +12,34 @@ URL_BASE = "https://www.tce.sp.gov.br"
 URL_COMUNICADOS = f"{URL_BASE}/comunicados"
 DB_FILE = "comunicados_vistos.json"
 
-# Configurações de E-mail (Pegando das variáveis de ambiente do GitHub)
-EMAIL_REMETENTE = os.environ.get("EMAIL_USER")
-EMAIL_SENHA = os.environ.get("EMAIL_PASS")
-EMAIL_DESTINATARIO = os.environ.get("EMAIL_USER") # Pode ser o mesmo ou outro
+# LISTA DE TERMOS PARA EXCLUIR (Filtro de assunto)
+TERMOS_EXCLUIDOS = [
+    "atos de pessoal", "fase iv", "área estadual", "composição do tribunal",
+    "concursos públicos", "data comemorativa", "educação fiscal",
+    "elaboração da política", "entidades proibidas de novos repasses",
+    "fase iii", "fase v", "iralc", "ok", "plano municipal da primeira infância",
+    "políticas públicas", "prorrogação do prazo de adesão",
+    "questionários do ieg", "volume de processos"
+]
 
 def enviar_email(assunto, corpo_html):
-    # O EMAIL_USER será seu Gmail pessoal
-    # O EMAIL_PASS será a Senha de App do seu Gmail
+    # Pega as credenciais do Gmail que você configurou nos Secrets do GitHub
     remetente_gmail = os.environ.get("EMAIL_USER") 
     senha_gmail = os.environ.get("EMAIL_PASS")
     
-    # Aqui você define como quer aparecer na caixa de entrada do seu corporativo
-    # Exemplo: "Alerta TCE <seu-email@smarapd.com.br>"
+    # Suas configurações de exibição e destino corporativo
     nome_exibicao = "Monitor TCE"
-    email_corporativo = "atboliveira@smarapd.com.br" # Coloque seu e-mail da empresa aqui
+    email_corporativo = "atboliveira@smarapd.com.br"
 
     msg = MIMEMultipart()
-    # Esta linha configura o remetente que você verá no Outlook
-    msg['From'] = f"{nome_exibicao} <{email_corporativo}>"
+    # Mantém a configuração de "From" que você estava usando
+    msg['From'] = f"{nome_exibicao} <{remetente_gmail}>"
     msg['To'] = email_corporativo 
     msg['Subject'] = assunto
 
     msg.attach(MIMEText(corpo_html, 'html'))
 
     try:
-        # Configuração para Gmail
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(remetente_gmail, senha_gmail)
@@ -49,6 +51,9 @@ def enviar_email(assunto, corpo_html):
         
 def buscar_comunicados():
     headers = {'User-Agent': 'Mozilla/5.0'}
+    # Mantém a lógica de mês dinâmico que você adicionou (/04/, /05/, etc)
+    mes_atual = datetime.now().strftime("/%m/")
+    
     try:
         response = requests.get(URL_COMUNICADOS, headers=headers)
         response.raise_for_status()
@@ -61,19 +66,25 @@ def buscar_comunicados():
         for row in rows:
             cols = row.find_all('td')
             if len(cols) < 4: continue
+            
             area = cols[0].get_text(strip=True).upper()
             codigo = cols[1].get_text(strip=True)
             titulo_elem = cols[2].find('a')
+            titulo = titulo_elem.get_text(strip=True)
             data_pub = cols[3].get_text(strip=True)
 
-           mes_atual = datetime.now().strftime("/%m/")
-           
-           if area in ['AUDESP', 'SDG'] and mes_atual in data_pub:
+            # LÓGICA DE FILTRO:
+            # 1. Verifica se é AUDESP/SDG e se é do mês atual
+            # 2. Verifica se o título contém algum dos termos proibidos
+            titulo_low = titulo.lower()
+            contem_excluido = any(termo in titulo_low for termo in TERMOS_EXCLUIDOS)
+
+            if area in ['AUDESP', 'SDG'] and mes_atual in data_pub and not contem_excluido:
                 comunicados.append({
                     "id": f"{codigo}-{data_pub}",
                     "codigo": codigo,
                     "data": data_pub,
-                    "titulo": titulo_elem.get_text(strip=True),
+                    "titulo": titulo,
                     "link": URL_BASE + titulo_elem['href']
                 })
         return comunicados
@@ -89,7 +100,8 @@ def main():
     novos = [c for c in todos if c['id'] not in vistos]
 
     if novos:
-        corpo = "<h2>Novos Comunicados TCE-SP (Março)</h2><ul>"
+        # Título dinâmico para o corpo do e-mail
+        corpo = f"<h2>Novos Comunicados TCE-SP</h2><ul>"
         for n in novos:
             corpo += f"<li><b>{n['codigo']}</b> ({n['data']})<br>{n['titulo']}<br><a href='{n['link']}'>Link Direto</a></li><br>"
             vistos.append(n['id'])
@@ -100,7 +112,7 @@ def main():
         with open(DB_FILE, 'w') as f:
             json.dump(vistos, f)
     else:
-        print("Sem novidades para enviar por e-mail.")
+        print("Sem novidades relevantes para enviar por e-mail.")
 
 if __name__ == "__main__":
     main()
